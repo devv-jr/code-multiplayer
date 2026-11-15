@@ -1,2 +1,6 @@
 node_modules/
 dist/
+
+# Documentos locales: no se suben al repo.
+CLAUDE.md
+README.md

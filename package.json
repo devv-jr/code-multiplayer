@@ -16,9 +16,10 @@
   },
   "scripts": {
     "dev": "tsx src/cli.ts",
-    "build": "tsc",
-    "dev:ui": "vite --config ui/vite.config.ts",
+    "build": "npm run build:cli && npm run build:ui",
+    "build:cli": "tsc",
     "build:ui": "tsc -p ui/tsconfig.json && vite build --config ui/vite.config.ts",
+    "dev:ui": "vite --config ui/vite.config.ts",
     "test": "vitest run"
   },
   "dependencies": {
