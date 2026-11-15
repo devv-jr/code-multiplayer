@@ -1,0 +1,41 @@
+{
+  "name": "mp",
+  "version": "0.1.0",
+  "description": "Code Multiplayer: ve el trabajo sin commit de tu compañero usando Git como servidor",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "mp": "dist/cli.js",
+    "codemp": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "tsx src/cli.ts",
+    "build": "tsc",
+    "dev:ui": "vite --config ui/vite.config.ts",
+    "build:ui": "tsc -p ui/tsconfig.json && vite build --config ui/vite.config.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "commander": "^15.1.0",
+    "open": "^11.0.4",
+    "picocolors": "^1.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.0"
+  }
+}
