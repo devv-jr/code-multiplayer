@@ -1165,6 +1165,341 @@ code {
   white-space: nowrap;
 }
 
+/* ───────── Cajón de detalle (diff) ───────── */
+
+/* A la derecha en pantallas anchas; hoja inferior en las angostas (abajo). */
+.drawer {
+  --drawer-w: min(600px, 46vw);
+  position: fixed;
+  z-index: 20;
+  top: 12px;
+  right: 12px;
+  bottom: 12px;
+  width: var(--drawer-w);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px;
+  border-radius: var(--radius);
+  border: 1px solid rgba(241, 220, 174, 0.4);
+  background:
+    linear-gradient(170deg, rgba(88, 224, 200, 0.1), rgba(255, 255, 255, 0.02) 40%),
+    #081112;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 0 70px -20px rgba(241, 220, 174, 0.35),
+    0 30px 80px rgba(0, 0, 0, 0.7);
+  animation: drawer-in 0.32s cubic-bezier(0.2, 1.2, 0.4, 1) both;
+}
+
+@keyframes drawer-in {
+  from {
+    opacity: 0;
+    transform: translateX(30px);
+  }
+}
+
+/* Con el cajón abierto, la página deja libre el lado derecho. */
+.page.with-drawer {
+  margin-right: calc(min(600px, 46vw) + 12px);
+}
+
+.drawer-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.drawer-title {
+  min-width: 0;
+}
+
+.drawer-path {
+  font-family: var(--mono);
+  font-size: 1.05rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.drawer-dir {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.close {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--glass);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.close:hover {
+  border-color: var(--line-strong);
+}
+
+.drawer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.action {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(241, 220, 174, 0.6);
+  background: rgba(241, 220, 174, 0.1);
+  color: var(--gold);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.action:hover {
+  background: rgba(241, 220, 174, 0.2);
+}
+
+.action:disabled {
+  cursor: not-allowed;
+  color: var(--faint);
+  border-color: var(--line);
+  background: transparent;
+}
+
+.action-hint {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px 5px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.tab[aria-selected="true"] {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--c) 70%, transparent);
+  background: color-mix(in srgb, var(--c) 14%, transparent);
+  box-shadow: 0 0 20px -8px var(--c);
+}
+
+.drawer-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.drawer-empty {
+  padding: 18px 0;
+}
+
+/* El diff: se desplaza por dentro, en vertical y en horizontal. */
+.diff {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.4);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+/* Tan ancho como la línea más larga, para que el fondo de color la cubra. */
+.diff-lines {
+  min-width: max-content;
+  padding: 6px 0;
+}
+
+.hunk + .hunk {
+  margin-top: 6px;
+}
+
+.dl {
+  display: grid;
+  grid-template-columns: 5ch 5ch 2ch auto;
+  white-space: pre;
+}
+
+.dl-num {
+  text-align: right;
+  padding-right: 1ch;
+  color: var(--faint);
+  user-select: none;
+}
+
+.dl-mark {
+  text-align: center;
+  font-weight: 700;
+  user-select: none;
+}
+
+.dl-text {
+  padding-right: 14px;
+  tab-size: 4;
+}
+
+.dl-add {
+  background: rgba(99, 230, 164, 0.13);
+}
+
+.dl-add .dl-mark {
+  color: var(--good);
+}
+
+.dl-del {
+  background: rgba(255, 107, 122, 0.13);
+}
+
+.dl-del .dl-mark {
+  color: var(--danger);
+}
+
+.dl-context {
+  color: var(--muted);
+}
+
+.dl-hunk {
+  color: var(--faint);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.dl-note {
+  color: var(--faint);
+  font-style: italic;
+}
+
+/* Hoja inferior en pantallas angostas. */
+@media (max-width: 900px) {
+  .drawer {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    height: 72vh;
+    border-radius: var(--radius) var(--radius) 0 0;
+    animation-name: sheet-in;
+  }
+
+  .page.with-drawer {
+    margin-right: auto;
+    padding-bottom: 74vh;
+  }
+}
+
+@keyframes sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+}
+
+/* ───────── Botón de avisos y toasts ───────── */
+
+.bell {
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8rem;
+  color: var(--gold);
+  border-color: rgba(241, 220, 174, 0.55);
+}
+
+.bell:hover {
+  background: rgba(241, 220, 174, 0.12);
+}
+
+/* Abajo a la izquierda: el cajón de diff vive a la derecha. */
+.toasts {
+  position: fixed;
+  z-index: 30;
+  left: 16px;
+  bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(380px, calc(100vw - 32px));
+  pointer-events: none;
+}
+
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 10px 10px 12px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--c, #bee8e2) 55%, transparent);
+  background:
+    linear-gradient(100deg, color-mix(in srgb, var(--c, #bee8e2) 16%, transparent), transparent 70%),
+    #0a1516;
+  box-shadow:
+    0 0 36px -14px var(--c, #bee8e2),
+    0 18px 40px rgba(0, 0, 0, 0.6);
+  animation: toast-in 0.4s cubic-bezier(0.2, 1.5, 0.4, 1) both;
+}
+
+.toast-clash {
+  --c: var(--danger);
+}
+
+.toast-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.toast-close {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.toast-close:hover {
+  color: var(--text);
+  border-color: var(--line);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.94);
+  }
+}
+
 /* ───────── Pantallas angostas ───────── */
 
 @media (max-width: 820px) {

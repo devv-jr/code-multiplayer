@@ -238,7 +238,7 @@ interface FaceProps {
 }
 
 /** Avatar pequeño de un jugador, dentro de un aro de su color. */
-function Face({ user, state, colors, now }: FaceProps) {
+export function Face({ user, state, colors, now }: FaceProps) {
   const player = state.players.find((p) => p.user === user);
   const color = colors.get(user) ?? "#ffffff";
   const status = player ? playerStatus(player.lastWipAt, now) : "dormido";

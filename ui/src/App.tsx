@@ -1,19 +1,80 @@
-import { useMemo, useState } from "react";
-import { type State, timeAgo, useNow, usePanel } from "./api";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type ActivityEvent, type State, timeAgo, useNow, usePanel } from "./api";
+import { DiffDrawer } from "./DiffDrawer";
 import { BranchIcon } from "./icons";
 import { Lobby } from "./Lobby";
+import {
+  askNotificationPermission,
+  NoticeGrouper,
+  notificationPermission,
+  type Permission,
+  showSystemNotification,
+  SystemThrottle,
+} from "./notifications";
 import { assignColors } from "./palette";
 import { ProjectMap } from "./ProjectMap";
 import { joinNames } from "./text";
+import { CLASH_TOAST_MS, type Toast, TOAST_MS, Toasts } from "./Toasts";
+
+/** Como mucho, este número de avisos a la vez en pantalla. */
+const MAX_TOASTS = 5;
 
 /** Cuántos choques se listan en el banner antes de resumir. */
 const MAX_CLASHES_SHOWN = 3;
 
 export function App() {
-  const { state, tree, connected } = usePanel();
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const [permission, setPermission] = useState<Permission>(notificationPermission);
+  const stateRef = useRef<State | null>(null);
+  const grouper = useRef<NoticeGrouper | null>(null);
+  const throttle = useRef(new SystemThrottle());
+
+  // Cada lote de novedades del servidor se convierte en avisos.
+  const onActivity = (events: ActivityEvent[]) => {
+    const current = stateRef.current;
+    if (!current) return;
+    grouper.current ??= new NoticeGrouper(current.me);
+    const nowMs = Date.now();
+
+    const fresh: Toast[] = [];
+    for (const notice of grouper.current.push(events, nowMs)) {
+      // Pestaña oculta y con permiso: notificación del sistema.
+      // Pestaña visible (o sin permiso): aviso dentro de la página.
+      const canNotify = document.hidden && notificationPermission() === "granted";
+      if (canNotify && throttle.current.allow(notice, nowMs)) {
+        showSystemNotification(`mp · ${current.repo.name}`, notice);
+      } else {
+        const life = notice.kind === "clash" ? CLASH_TOAST_MS : TOAST_MS;
+        fresh.push({ ...notice, expiresAt: nowMs + life });
+      }
+    }
+    if (fresh.length > 0) {
+      // Un aviso con el mismo id reemplaza al anterior (es su actualización).
+      setToasts((old) =>
+        [...old.filter((toast) => !fresh.some((f) => f.id === toast.id)), ...fresh].slice(-MAX_TOASTS),
+      );
+    }
+  };
+
+  const { state, tree, connected } = usePanel(onActivity);
+  stateRef.current = state;
   const now = useNow();
+
+  // Los avisos vencidos se retiran solos.
+  useEffect(() => {
+    setToasts((old) =>
+      old.some((toast) => toast.expiresAt <= now.getTime())
+        ? old.filter((toast) => toast.expiresAt > now.getTime())
+        : old,
+    );
+  }, [now]);
+  const dismissToast = useCallback(
+    (id: string) => setToasts((old) => old.filter((toast) => toast.id !== id)),
+    [],
+  );
   const [onlyActive, setOnlyActive] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
+  const closeDrawer = useCallback(() => setSelected(null), []);
 
   // El color de cada jugador depende solo de quiénes están en la sala.
   const userKey = state?.players.map((player) => player.user).join("\n") ?? "";
@@ -28,7 +89,7 @@ export function App() {
   }
 
   return (
-    <main className="page">
+    <main className={selected ? "page with-drawer" : "page"}>
       <header className="topbar">
         <div className="brand">
           <span className="brand-mark" aria-hidden="true" />
@@ -62,6 +123,7 @@ export function App() {
             </span>
             Solo archivos con actividad
           </button>
+          <BellPill permission={permission} onChange={setPermission} />
         </div>
       </header>
 
@@ -84,6 +146,20 @@ export function App() {
         selected={selected}
         onSelect={(path) => setSelected(path === selected ? null : path)}
       />
+
+      {/* key: al cambiar de archivo el cajón empieza de cero (pestaña y diff). */}
+      {selected && (
+        <DiffDrawer
+          key={selected}
+          file={selected}
+          state={state}
+          colors={colors}
+          now={now}
+          onClose={closeDrawer}
+        />
+      )}
+
+      <Toasts toasts={toasts} state={state} colors={colors} now={now} onDismiss={dismissToast} />
     </main>
   );
 }
@@ -122,4 +198,46 @@ function ClashBanner({ state, onSelect }: { state: State; onSelect: (path: strin
       </ul>
     </div>
   );
+}
+
+/**
+ * Estado de las notificaciones del sistema. El permiso solo se puede pedir
+ * desde un clic del usuario, por eso es un botón.
+ */
+function BellPill({
+  permission,
+  onChange,
+}: {
+  permission: Permission;
+  onChange: (permission: Permission) => void;
+}) {
+  switch (permission) {
+    case "granted":
+      return (
+        <span className="pill pill-on" title="Te aviso cuando esta pestaña está en segundo plano">
+          🔔 Avisos activados
+        </span>
+      );
+    case "denied":
+      return (
+        <span
+          className="pill pill-off"
+          title="Están bloqueados para este sitio. Permítelos en los ajustes del navegador."
+        >
+          🔕 Avisos bloqueados
+        </span>
+      );
+    case "unsupported":
+      return <span className="pill pill-quiet">🔕 Avisos no disponibles</span>;
+    default:
+      return (
+        <button
+          type="button"
+          className="pill bell"
+          onClick={() => void askNotificationPermission().then(onChange)}
+        >
+          🔔 Activar avisos
+        </button>
+      );
+  }
 }
