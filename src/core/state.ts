@@ -33,14 +33,24 @@ export interface FetchStatus {
 // ─────────────────────── Construcción ───────────────────────
 
 /** Lee los wips locales y arma el estado completo. */
-export async function buildState(config: Config, fetch: FetchStatus): Promise<State> {
+export async function buildState(
+  config: Config,
+  fetch: FetchStatus,
+  /** Lo que solo sabe el daemon cuando corre en este mismo proceso (mp up). */
+  local: { uploadPausedFiles?: readonly string[] } = {},
+): Promise<State> {
   const { repoRoot, user: me, remote } = config;
   const gitDir = await getGitDir(repoRoot);
 
   const players: Player[] = [];
   for (const { user, wip } of await listWips(repoRoot)) {
     const player = await buildPlayer(repoRoot, user, wip, user === me);
-    if (player.isMe) player.daemonRunning = await isDaemonRunning(gitDir);
+    if (player.isMe) {
+      player.daemonRunning = await isDaemonRunning(gitDir);
+      if (local.uploadPausedFiles && local.uploadPausedFiles.length > 0) {
+        player.uploadPausedFiles = [...local.uploadPausedFiles];
+      }
+    }
     players.push(player);
   }
   // Orden fijo, para que dos estados iguales se vean iguales al compararlos.

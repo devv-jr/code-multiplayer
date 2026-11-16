@@ -5,3 +5,7 @@ dist/
 CLAUDE.md
 README.md
 PLAN-UI.md
+GUIA-YERED.md
+
+# Archivos de configuración locales: no se suben al repo.
+secrets.*

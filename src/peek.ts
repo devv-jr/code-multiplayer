@@ -81,7 +81,7 @@ export async function preparePeek(
     throw new Error(
       available === ""
         ? `No hay trabajo subido de "${user}". Nadie ha subido trabajo todavía: cada quien debe correr mp start.`
-        : `No hay trabajo subido de "${user}". Usuarios disponibles: ${available}`,
+        : `No hay trabajo subido de "${user}". Usuarios disponibles: ${available}\n  Qué hacer: revisa cómo está escrito el nombre; para ver quién está, corre  mp who`,
     );
   }
 

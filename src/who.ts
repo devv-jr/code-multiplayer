@@ -1,7 +1,7 @@
 // mp who: quién está trabajando, en qué rama, hace cuánto y cuánto cambió.
 
 import pc from "picocolors";
-import type { Config } from "./config.js";
+import { type Config, isValidUser } from "./config.js";
 import { ASLEEP_AFTER_MS as INACTIVE_AFTER_MS } from "./core/constants.js";
 import { formatStat, formatTable, relativeTime } from "./format.js";
 import {
@@ -45,8 +45,12 @@ export async function getWipBase(repoRoot: string, wip: Wip): Promise<string> {
 export async function listWips(repoRoot: string): Promise<{ user: string; wip: Wip }[]> {
   const wips = [];
   for (const ref of await listRefs(repoRoot, WIP_PREFIX)) {
+    const user = ref.slice(WIP_PREFIX.length);
+    // Solo cuentan las refs con nombre de usuario válido. Así se ignoran las
+    // refs de prueba de "mp doctor" (refs/wip/DOCTOR...), que no son jugadores.
+    if (!isValidUser(user)) continue;
     const wip = await readWip(repoRoot, ref);
-    if (wip) wips.push({ user: ref.slice(WIP_PREFIX.length), wip });
+    if (wip) wips.push({ user, wip });
   }
   return wips;
 }

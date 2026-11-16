@@ -4,7 +4,7 @@
 import type { Config } from "./config.js";
 import { type ActivityEvent, diffStates } from "./core/events.js";
 import { buildState, type State } from "./core/state.js";
-import { shortError, sleep } from "./daemon.js";
+import { type DaemonStatus, shortError, sleep } from "./daemon.js";
 import { fetchWipRefs, GitError } from "./git.js";
 
 /** Esperas tras fetch fallidos seguidos: 10 s → 30 s → 60 s. */
@@ -29,6 +29,8 @@ export interface FetcherOptions {
   intervalMs: number;
   /** Solo para pruebas: esperas de reintento más cortas. */
   backoffMs?: readonly number[];
+  /** Con `mp up`: el estado del daemon que corre en este mismo proceso. */
+  daemonStatus?: DaemonStatus;
 }
 
 /**
@@ -58,7 +60,17 @@ export function createFetcher(config: Config, options: FetcherOptions): Fetcher 
     for (const listener of listeners) listener(message);
   };
 
-  async function refresh(): Promise<boolean> {
+  // Si piden un ciclo mientras otro está en marcha, se comparte el mismo:
+  // dos fetch a la vez sobre las mismas refs chocarían entre sí.
+  let inFlight: Promise<boolean> | null = null;
+  function refresh(): Promise<boolean> {
+    inFlight ??= refreshNow().finally(() => {
+      inFlight = null;
+    });
+    return inFlight;
+  }
+
+  async function refreshNow(): Promise<boolean> {
     let ok = true;
     let error: string | undefined;
 
@@ -80,12 +92,11 @@ export function createFetcher(config: Config, options: FetcherOptions): Fetcher 
     // wip, mi daemon) puede haber cambiado, y lo viejo se sigue mostrando.
     let next: State;
     try {
-      next = await buildState(config, {
-        ok,
-        intervalSec,
-        fetchedAt,
-        ...(error !== undefined ? { error } : {}),
-      });
+      next = await buildState(
+        config,
+        { ok, intervalSec, fetchedAt, ...(error !== undefined ? { error } : {}) },
+        { uploadPausedFiles: options.daemonStatus?.uploadPausedFiles },
+      );
     } catch (e) {
       if (!state) throw e; // sin ningún estado previo no hay nada que mostrar
       next = { ...state, fetch: { ok: false, error: shortError(e), intervalSec } };

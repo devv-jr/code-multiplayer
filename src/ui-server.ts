@@ -231,7 +231,11 @@ export async function startUiServer(options: UiServerOptions): Promise<UiServer>
       if ((error as NodeJS.ErrnoException).code !== "EADDRINUSE") throw error;
       if (port >= lastPort) {
         throw new Error(
-          `No hay un puerto libre entre ${options.port} y ${lastPort}. Indica otro con: --port <n>`,
+          [
+            `No hay un puerto libre entre ${options.port} y ${lastPort}.`,
+            "  Por qué: otros programas (o varios paneles de mp abiertos) los están usando.",
+            "  Qué hacer: cierra los paneles que no uses, o elige otro puerto con  --port <n>",
+          ].join("\n"),
         );
       }
       port += 1;

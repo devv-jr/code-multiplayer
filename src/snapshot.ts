@@ -25,7 +25,11 @@ import { getCurrentBranch, getGitDir, getHead, git, runGit } from "./git.js";
 export class NoCommitsError extends Error {
   constructor() {
     super(
-      "Este repo todavía no tiene commits. Haz un primer commit (git commit) y vuelve a intentar.",
+      [
+        "Este repo todavía no tiene commits.",
+        "  Por qué: mp compara tu trabajo contra el último commit, y aquí aún no hay ninguno.",
+        '  Qué hacer: guarda un primer commit con  git add -A  y luego  git commit -m "primer commit"',
+      ].join("\n"),
     );
     this.name = "NoCommitsError";
   }
@@ -120,10 +124,7 @@ export async function createSnapshot(repoRoot: string, user: string): Promise<Sn
 
   // Un commit necesita autor. Si el usuario no configuró user.name/user.email
   // en git, usamos su nombre de mp solo para este commit (no se guarda nada).
-  const hasIdentity = (await runGit(["var", "GIT_COMMITTER_IDENT"], { cwd: repoRoot })).ok;
-  const identity = hasIdentity
-    ? []
-    : ["-c", `user.name=${user}`, "-c", `user.email=${user}@mp.invalid`];
+  const identity = await identityArgs(repoRoot, user);
 
   // commit-tree crea el commit pero no lo conecta a ninguna rama.
   const commit = await git(
@@ -133,6 +134,16 @@ export async function createSnapshot(repoRoot: string, user: string): Promise<Sn
   await git(["update-ref", ref, commit], { cwd: repoRoot });
 
   return { ref, commit, tree, parent, branch, created: true };
+}
+
+/**
+ * Opciones de git para poder crear un commit aunque el usuario no tenga
+ * user.name/user.email: en ese caso se usa su nombre de mp, solo para ese
+ * comando (no se guarda nada). Si ya tiene identidad, no hace falta nada.
+ */
+export async function identityArgs(repoRoot: string, user: string): Promise<string[]> {
+  const hasIdentity = (await runGit(["var", "GIT_COMMITTER_IDENT"], { cwd: repoRoot })).ok;
+  return hasIdentity ? [] : ["-c", `user.name=${user}`, "-c", `user.email=${user}@mp.invalid`];
 }
 
 /**

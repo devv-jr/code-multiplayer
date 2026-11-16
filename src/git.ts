@@ -35,6 +35,8 @@ export interface GitOptions {
   env?: Record<string, string>;
   /** Cancela git si tarda más que esto (para operaciones de red). */
   timeoutMs?: number;
+  /** Texto que se le pasa a git por la entrada estándar. */
+  input?: string;
 }
 
 export interface GitResult {
@@ -56,7 +58,7 @@ export function runGit(
   const cwd = options.cwd ?? process.cwd();
 
   return new Promise((resolve, reject) => {
-    execFile(
+    const child = execFile(
       "git",
       [...args],
       {
@@ -98,7 +100,12 @@ export function runGit(
         } else if (error.code === "ENOENT") {
           reject(
             new GitError(
-              "No se encontró git. Instala git (2.30 o superior) y verifica que esté en el PATH.",
+              [
+                "No encontré git en esta computadora.",
+                "  Por qué: mp usa git para todo, y no está instalado (o la terminal no lo encuentra).",
+                "  Qué hacer: instálalo (macOS: brew install git · Windows: winget install Git.Git),",
+                "             cierra y vuelve a abrir la terminal, e intenta de nuevo.",
+              ].join("\n"),
               args,
               null,
               "",
@@ -116,6 +123,8 @@ export function runGit(
         }
       },
     );
+    // Sin esto, un git que lee su entrada se quedaría esperando.
+    child.stdin?.end(options.input ?? "");
   });
 }
 
@@ -159,7 +168,10 @@ export async function ensureGit(): Promise<string> {
   const [major, minor] = version;
   if (major < minMajor || (major === minMajor && minor < minMinor)) {
     throw new Error(
-      `Tu git es ${major}.${minor} y mp necesita ${minMajor}.${minMinor} o superior. Actualiza git.`,
+      [
+        `Tu git es ${major}.${minor} y mp necesita ${minMajor}.${minMinor} o superior.`,
+        "  Qué hacer: actualízalo (macOS: brew install git · Windows: winget upgrade Git.Git) y vuelve a abrir la terminal.",
+      ].join("\n"),
     );
   }
   return `${major}.${minor}`;
@@ -170,7 +182,11 @@ export async function getRepoRoot(cwd: string): Promise<string> {
   const result = await runGit(["rev-parse", "--show-toplevel"], { cwd });
   if (!result.ok) {
     throw new GitError(
-      "Esta carpeta no está dentro de un repositorio git.",
+      [
+        "Esta carpeta no está dentro de un repositorio git.",
+        "  Por qué: mp se usa dentro de la carpeta de un proyecto que usa git.",
+        "  Qué hacer: entra a la carpeta del proyecto con  cd <carpeta>  e intenta de nuevo.",
+      ].join("\n"),
       ["rev-parse", "--show-toplevel"],
       result.exitCode,
       result.stderr,
@@ -290,7 +306,12 @@ export async function fetchWipRefs(cwd: string, remote: string): Promise<void> {
   if (!result.ok) {
     const detail = result.stderr.trim().split(/\r?\n/)[0] ?? "";
     throw new GitError(
-      `No se pudo traer el trabajo del remoto "${remote}". Revisa tu conexión y tus credenciales de git.\n  Detalle: ${detail}`,
+      [
+        `No se pudo traer el trabajo del remoto "${remote}".`,
+        "  Por qué: no hay conexión, o git no pudo iniciar sesión. Revisa tu conexión y tus credenciales de git.",
+        `  Detalle: ${detail}`,
+        `  Qué hacer: comprueba tu internet; si funciona, corre  git fetch ${remote}  y sigue lo que te pida.`,
+      ].join("\n"),
       ["fetch", remote],
       result.exitCode,
       result.stderr,
@@ -430,4 +451,28 @@ export async function commitExists(cwd: string, commit: string): Promise<boolean
 export async function listFiles(cwd: string, commit: string): Promise<string[]> {
   const output = await git(["ls-tree", "-r", "-z", "--name-only", commit], { cwd });
   return output.split("\0").filter((file) => file !== "");
+}
+
+/**
+ * Lista archivos del working tree según su estado, con "/" como separador.
+ * `filters` son opciones de "git ls-files", por ejemplo:
+ *   ["--others", "--exclude-standard"]  nuevos que no están ignorados
+ *   ["--modified"]                      rastreados con cambios (o borrados)
+ */
+export async function listFilesByStatus(
+  cwd: string,
+  filters: readonly string[],
+): Promise<string[]> {
+  const output = await git(["ls-files", "-z", ...filters], { cwd });
+  return output.split("\0").filter((file) => file !== "");
+}
+
+/** Borra una ref del remoto. Devuelve false si no se pudo. */
+export async function deleteRemoteRef(cwd: string, remote: string, ref: string): Promise<boolean> {
+  const result = await runGit(["push", "--no-verify", "--quiet", remote, `:${ref}`], {
+    cwd,
+    env: NETWORK_ENV,
+    timeoutMs: NETWORK_TIMEOUT_MS,
+  });
+  return result.ok;
 }

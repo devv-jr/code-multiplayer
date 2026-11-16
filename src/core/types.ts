@@ -27,6 +27,12 @@ export interface Player {
   totals: { files: number; added: number; deleted: number };
   /** Solo para mí: ¿está corriendo mi daemon (mp start)? */
   daemonRunning?: boolean;
+  /**
+   * Solo para mí y solo con `mp up`: archivos que parecen secretos y tienen
+   * mi subida en pausa. Ausente si la subida va normal (o si el panel corre
+   * aparte con `mp ui`, que no puede saberlo).
+   */
+  uploadPausedFiles?: string[];
   /** Si no se pudo leer su trabajo, por qué. */
   error?: string;
 }

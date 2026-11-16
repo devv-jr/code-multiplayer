@@ -107,6 +107,8 @@ const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "
 export function runCli(
   args: string[],
   cwd: string,
+  /** Variables de entorno extra (por ejemplo, un PATH vacío para simular que no hay git). */
+  env: Record<string, string> = {},
 ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
   const tsx = path.join(projectRoot, "node_modules", "tsx", "dist", "cli.mjs");
   const cli = path.join(projectRoot, "src", "cli.ts");
@@ -114,7 +116,7 @@ export function runCli(
     execFile(
       process.execPath,
       [tsx, cli, ...args],
-      { cwd, env: { ...process.env, NO_COLOR: "1" } },
+      { cwd, env: { ...process.env, NO_COLOR: "1", ...env } },
       (error, stdout, stderr) => {
         const exitCode = error ? (typeof error.code === "number" ? error.code : 1) : 0;
         resolve({ exitCode, stdout, stderr });

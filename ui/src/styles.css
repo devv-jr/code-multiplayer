@@ -1500,6 +1500,49 @@ code {
   }
 }
 
+/* ───────── Aviso de subida en pausa (guardia de secretos) ───────── */
+
+/* Una tarjeta en pausa nunca se ve apagada, aunque el jugador esté dormido. */
+.player.player-paused {
+  filter: none;
+  opacity: 1;
+  border-color: rgba(255, 107, 122, 0.7);
+}
+
+.paused {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 107, 122, 0.7);
+  background:
+    linear-gradient(120deg, rgba(255, 107, 122, 0.18), rgba(255, 107, 122, 0.04) 70%),
+    var(--glass-solid);
+  box-shadow: 0 0 34px -14px var(--danger);
+  font-size: 0.86rem;
+  overflow-wrap: anywhere;
+}
+
+.paused-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--danger);
+}
+
+.paused-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.paused-foot {
+  color: var(--muted);
+}
+
 /* ───────── Pantallas angostas ───────── */
 
 @media (max-width: 820px) {
