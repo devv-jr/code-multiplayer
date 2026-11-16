@@ -3,6 +3,7 @@
 
 import { type CSSProperties, type ReactNode, useLayoutEffect, useRef, useState } from "react";
 import { ASLEEP_AFTER_MS, playerStatus, type PlayerStatus } from "../../src/core/constants.js";
+import { secretIgnoreLine } from "../../src/core/secret-rules.js";
 import { type Player, type State, timeAgo } from "./api";
 import { Avatar } from "./avatar";
 import { BranchIcon, MoonIcon } from "./icons";
@@ -170,6 +171,45 @@ export function Lobby({ state, colors, now }: LobbyProps) {
   );
 }
 
+/**
+ * Aviso grande en mi tarjeta cuando mp pausó la subida por archivos que
+ * parecen secretos. Va aquí, y no solo en la terminal, porque es donde uno
+ * está mirando.
+ */
+function PausedNotice({ files }: { files: string[] }) {
+  // La línea de .gitignore que tapa cada archivo (sin repetir).
+  const ignoreLines = [...new Set(files.map((file) => secretIgnoreLine(file) ?? file))];
+
+  return (
+    <div className="paused" role="alert">
+      <p className="paused-title">⏸ Tu subida está en pausa</p>
+      <p>
+        {files.length === 1 ? "Este archivo parece" : "Estos archivos parecen"} tener claves o
+        contraseñas, así que mp no va a subir nada mientras no esté ignorado:
+      </p>
+      <ul className="paused-list">
+        {files.map((file) => (
+          <li key={file}>
+            <code>{file}</code>
+          </li>
+        ))}
+      </ul>
+      <p>
+        Para seguir, abre el archivo <code>.gitignore</code> de este proyecto y agrega{" "}
+        {ignoreLines.length === 1 ? "esta línea" : "estas líneas, una por renglón"}:
+      </p>
+      <ul className="paused-list">
+        {ignoreLines.map((line) => (
+          <li key={line}>
+            <code>{line}</code>
+          </li>
+        ))}
+      </ul>
+      <p className="paused-foot">En cuanto lo guardes, sigo solo. No hace falta reiniciar nada.</p>
+    </div>
+  );
+}
+
 interface PlayerCardProps {
   player: Player;
   color: string;
@@ -190,7 +230,15 @@ function PlayerCard({ player, color, now, index, cardRef }: PlayerCardProps) {
   return (
     <article
       ref={cardRef}
-      className={`player player-${status}${player.isMe ? " player-me" : ""}`}
+      className={[
+        "player",
+        `player-${status}`,
+        player.isMe ? "player-me" : "",
+        // Con la subida en pausa la tarjeta no se atenúa: el aviso debe verse.
+        player.uploadPausedFiles?.length ? "player-paused" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
       style={{ "--c": color, "--i": index } as CSSProperties}
     >
       <div className="player-orb">
@@ -246,6 +294,10 @@ function PlayerCard({ player, color, now, index, cardRef }: PlayerCardProps) {
             <span className="plus">+{player.totals.added}</span>
             <span className="minus">−{player.totals.deleted}</span>
           </p>
+        )}
+
+        {player.isMe && player.uploadPausedFiles && player.uploadPausedFiles.length > 0 && (
+          <PausedNotice files={player.uploadPausedFiles} />
         )}
 
         {player.isMe && player.daemonRunning === false && (

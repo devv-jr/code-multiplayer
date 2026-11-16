@@ -25,6 +25,14 @@ export interface Config {
   remote: string;
 }
 
+/** Falta mp.user: todavía no se corrió mp init en este repo. */
+export class NotConfiguredError extends Error {
+  constructor() {
+    super("mp no está configurado en este repo. Corre primero: mp init");
+    this.name = "NotConfiguredError";
+  }
+}
+
 export interface InitOptions {
   /** Usuario dado con --user. Si falta, se pregunta con `askUser`. */
   user?: string;
@@ -83,9 +91,7 @@ export async function loadConfig(cwd: string): Promise<Config> {
   const repoRoot = await getRepoRoot(cwd);
 
   const user = await getLocalConfig(repoRoot, "mp.user");
-  if (!user) {
-    throw new Error("mp no está configurado en este repo. Corre primero: mp init");
-  }
+  if (!user) throw new NotConfiguredError();
   if (!isValidUser(user)) {
     throw new Error(`El usuario guardado ("${user}") no es válido. Corre de nuevo: mp init`);
   }

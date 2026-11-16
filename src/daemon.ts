@@ -6,6 +6,12 @@ import path from "node:path";
 import pc from "picocolors";
 import { clock, formatStat } from "./format.js";
 import { getDiffStat, getGitDir, GitError, pushCommitToRef } from "./git.js";
+import {
+  findSecretFiles,
+  findSecretsInSnapshot,
+  secretsHelp,
+  SecretsError,
+} from "./secret-guard.js";
 import { createSnapshot, NoCommitsError } from "./snapshot.js";
 
 // ───────────────────────────── Lock ─────────────────────────────
@@ -72,6 +78,12 @@ export async function isDaemonRunning(gitDir: string): Promise<boolean> {
 /** Esperas tras errores seguidos: 15 s → 30 s → 60 s (y se queda en 60 s). */
 const BACKOFF_MS = [15_000, 30_000, 60_000];
 
+/** Estado que el daemon comparte con el panel cuando corren juntos (mp up). */
+export interface DaemonStatus {
+  /** Archivos sensibles que tienen la subida en pausa. Vacío si todo va bien. */
+  uploadPausedFiles: string[];
+}
+
 export interface DaemonOptions {
   repoRoot: string;
   user: string;
@@ -83,6 +95,12 @@ export interface DaemonOptions {
   log?: (line: string) => void;
   /** Solo para pruebas: esperas de reintento más cortas. */
   backoffMs?: readonly number[];
+  /** Subir aunque haya archivos que parecen secretos (--allow-secrets). */
+  allowSecrets?: boolean;
+  /** Si se pasa, el daemon anota aquí cuándo pausa la subida. */
+  status?: DaemonStatus;
+  /** Se llama después de cada subida correcta. */
+  onUpload?: () => void;
 }
 
 /** Espera `ms` milisegundos, o menos si se aborta la señal. */
@@ -120,27 +138,79 @@ export async function runDaemon(options: DaemonOptions): Promise<void> {
   const log = options.log ?? ((line: string) => console.log(line));
   const backoff = options.backoffMs ?? BACKOFF_MS;
 
+  // Guardia de secretos, antes de la primera instantánea: si hay un archivo
+  // sensible sin ignorar, no se sube nada y se explica cómo arreglarlo.
+  const atStart = await findSecretFiles(repoRoot);
+  if (atStart.length > 0) {
+    if (!options.allowSecrets) throw new SecretsError(atStart);
+    log(
+      `${pc.yellow("⚠")} --allow-secrets: se van a subir archivos que parecen secretos: ${atStart
+        .map((file) => file.path)
+        .join(", ")}`,
+    );
+  }
+
   const releaseLock = await acquireLock(await getGitDir(repoRoot));
 
   // Último commit que sabemos que está en el remoto. Empieza en null para
   // que el primer ciclo siempre haga push (el remoto puede estar atrasado).
   let lastPushed: string | null = null;
   let failures = 0;
+  // Archivos por los que está pausada la subida ("" = no está pausada).
+  // Sirve para avisar una sola vez por cada conjunto de archivos.
+  let pausedFor = "";
 
   try {
     while (!signal.aborted) {
       let wait = intervalMs;
 
       try {
-        const snapshot = await createSnapshot(repoRoot, user);
+        // Guardia de secretos en cada ciclo: alguien puede crear un .env a
+        // mitad de sesión. Se revisa dos veces:
+        //   1. La carpeta de trabajo, antes de tomar la instantánea.
+        //   2. La instantánea misma, antes de subirla. Esta es la que manda:
+        //      un archivo creado justo entre la revisión 1 y la instantánea
+        //      ya quedó adentro, y solo aquí se alcanza a ver.
+        let secrets = options.allowSecrets ? [] : await findSecretFiles(repoRoot);
+        let snapshot = null;
+        if (secrets.length === 0) {
+          snapshot = await createSnapshot(repoRoot, user);
+          if (!options.allowSecrets && snapshot.commit !== lastPushed) {
+            secrets = await findSecretsInSnapshot(repoRoot, snapshot.parent, snapshot.commit);
+          }
+        }
 
-        if (snapshot.commit === lastPushed) {
-          log(pc.dim(`${clock()} · sin cambios`));
+        const paths = secrets.map((file) => file.path);
+        if (options.status) options.status.uploadPausedFiles = paths;
+
+        if (secrets.length > 0 || !snapshot) {
+          // En pausa: este ciclo no sube nada. Se avisa una vez por conjunto.
+          const key = paths.join("\n");
+          if (key !== pausedFor) {
+            pausedFor = key;
+            log(
+              [
+                `${clock()} ${pc.yellow("⏸")} subida en pausa: hay archivos que parecen secretos sin ignorar (${paths.join(", ")}).`,
+                secretsHelp(secrets),
+                "En cuanto lo arregles, sigo solo.",
+              ].join("\n"),
+            );
+          }
         } else {
-          await pushCommitToRef(repoRoot, remote, snapshot.commit, snapshot.ref);
-          lastPushed = snapshot.commit;
-          const stat = await getDiffStat(repoRoot, snapshot.parent, snapshot.commit);
-          log(`${clock()} ${pc.green("✓")} wip actualizado (${formatStat(stat)})`);
+          if (pausedFor !== "") {
+            pausedFor = "";
+            log(`${clock()} ${pc.green("✓")} ya no hay archivos sensibles sin ignorar: reanudo la subida`);
+          }
+
+          if (snapshot.commit === lastPushed) {
+            log(pc.dim(`${clock()} · sin cambios`));
+          } else {
+            await pushCommitToRef(repoRoot, remote, snapshot.commit, snapshot.ref);
+            lastPushed = snapshot.commit;
+            options.onUpload?.();
+            const stat = await getDiffStat(repoRoot, snapshot.parent, snapshot.commit);
+            log(`${clock()} ${pc.green("✓")} wip actualizado (${formatStat(stat)})`);
+          }
         }
         failures = 0;
       } catch (error) {

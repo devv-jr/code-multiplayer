@@ -35,6 +35,8 @@ export interface GitOptions {
   env?: Record<string, string>;
   /** Cancela git si tarda más que esto (para operaciones de red). */
   timeoutMs?: number;
+  /** Texto que se le pasa a git por la entrada estándar. */
+  input?: string;
 }
 
 export interface GitResult {
@@ -56,7 +58,7 @@ export function runGit(
   const cwd = options.cwd ?? process.cwd();
 
   return new Promise((resolve, reject) => {
-    execFile(
+    const child = execFile(
       "git",
       [...args],
       {
@@ -116,6 +118,8 @@ export function runGit(
         }
       },
     );
+    // Sin esto, un git que lee su entrada se quedaría esperando.
+    child.stdin?.end(options.input ?? "");
   });
 }
 
@@ -430,4 +434,28 @@ export async function commitExists(cwd: string, commit: string): Promise<boolean
 export async function listFiles(cwd: string, commit: string): Promise<string[]> {
   const output = await git(["ls-tree", "-r", "-z", "--name-only", commit], { cwd });
   return output.split("\0").filter((file) => file !== "");
+}
+
+/**
+ * Lista archivos del working tree según su estado, con "/" como separador.
+ * `filters` son opciones de "git ls-files", por ejemplo:
+ *   ["--others", "--exclude-standard"]  nuevos que no están ignorados
+ *   ["--modified"]                      rastreados con cambios (o borrados)
+ */
+export async function listFilesByStatus(
+  cwd: string,
+  filters: readonly string[],
+): Promise<string[]> {
+  const output = await git(["ls-files", "-z", ...filters], { cwd });
+  return output.split("\0").filter((file) => file !== "");
+}
+
+/** Borra una ref del remoto. Devuelve false si no se pudo. */
+export async function deleteRemoteRef(cwd: string, remote: string, ref: string): Promise<boolean> {
+  const result = await runGit(["push", "--no-verify", "--quiet", remote, `:${ref}`], {
+    cwd,
+    env: NETWORK_ENV,
+    timeoutMs: NETWORK_TIMEOUT_MS,
+  });
+  return result.ok;
 }
